@@ -1,57 +1,50 @@
-import sys
-# Принудительное использование UTF-8 для всех строковых операций
-sys.stdin.reconfigure(encoding='utf-8')
-sys.stdout.reconfigure(encoding='utf-8')
-
 from flask import Flask, request, jsonify
 from googletrans import Translator
+import json # Добавьте импорт для ручного парсинга
 
 app = Flask(__name__)
-# Явная поддержка UTF-8 для JSON
+# Убедитесь, что эта конфигурация осталась
 app.config['JSON_AS_ASCII'] = False
 app.config['JSONIFY_MIMETYPE'] = 'application/json; charset=utf-8'
 
-# Инициализация переводчика
 translator = Translator()
 
-# --- КОРНЕВОЙ МАРШРУТ (ДЛЯ ПРОВЕРКИ) ---
-@app.route('/', methods=['GET'])
-def index():
-    return jsonify({
-        'status': 'online',
-        'message': 'Godot Translator Backend (googletrans 4.0.0-rc1) is running!',
-        'library': 'googletrans==4.0.0-rc1 (same as Jupyter)',
-        'endpoints': ['/translate'],
-        'example': {
-            'url': '/translate',
-            'method': 'POST',
-            'body': {
-                'text': 'tere',
-                'src': 'et',
-                'dest': 'ru'
-            }
-        }
-    }), 200
+# ... (Оставьте корневой маршрут '/')
 
 # --- ЭНДПОИНТ ДЛЯ ПЕРЕВОДА ---
 @app.route('/translate', methods=['POST'])
 def translate_text():
-    # 1. Получаем данные из POST-запроса
-    data = request.get_json(force=True)
     
+    # 1. ЧИТАЕМ СЫРЫЕ БАЙТЫ ТЕЛА ЗАПРОСА
+    try:
+        raw_data = request.data
+        
+        # 2. ВРУЧНУЮ ДЕКОДИРУЕМ В UTF-8 И ПАРСИМ JSON
+        # Если body пустое или равно None, это вызовет ошибку, 
+        # поэтому обрабатываем это внутри try/except.
+        data = json.loads(raw_data.decode('utf-8')) 
+        
+    except Exception as e:
+        # Эта ошибка 400 возникает, если Godot отправил пустые или невалидные байты
+        print(f"[ERROR] Failed to decode/parse JSON: {e}")
+        return jsonify({'error': 'Invalid JSON or empty request body', 'details': str(e)}), 400
+
     # Проверка обязательных полей
     if not data or 'text' not in data:
         return jsonify({'error': 'Missing "text" parameter'}), 400
 
     text_to_translate = data.get('text', '')
-    src_lang = data.get('src', 'et')
+    src_lang = data.get('src', 'et') 
     dest_lang = data.get('dest', 'ru')
     
+    # Отладка:
+    print(f"[DEBUG] Received text (Decoded): '{text_to_translate}'")
+    
     try:
-        # 2. Выполняем перевод (как в Jupyter)
+        # 3. Выполняем перевод
         translation = translator.translate(text_to_translate, src=src_lang, dest=dest_lang)
         
-        # 3. Возвращаем результат
+        # 4. Возвращаем результат
         return jsonify({
             'original_text': translation.origin,
             'translated_text': translation.text,
@@ -60,14 +53,10 @@ def translate_text():
         }), 200
 
     except Exception as e:
-        # 4. Обработка ошибок
+        # 5. Обработка ошибок
         return jsonify({
             'error': 'Translation failed', 
             'details': str(e)
         }), 500
 
-# Запуск сервера локально (для тестирования)
-if __name__ == '__main__':
-    # В проде (Render/Heroku) gunicorn будет запускать приложение
-    # Для локального теста:
-    app.run(debug=True)
+# ... (Оставьте запуск if __name__ == '__main__')
