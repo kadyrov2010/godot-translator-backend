@@ -1,6 +1,12 @@
 # Godot Translator Backend
 
-Простой Flask-сервер для перевода текста с использованием `py-googletrans`.
+Простой Flask-сервер для перевода текста с использованием `deep-translator`.
+
+**Преимущества:**
+- ✅ Переводит **слова И фразы**
+- ✅ Стабильная работа
+- ✅ Без лимитов API
+- ✅ Бесплатно
 
 ## API Endpoint
 
@@ -23,6 +29,30 @@
   "source_language": "et",
   "target_language": "ru"
 }
+```
+
+### Примеры использования:
+
+**Одно слово:**
+```json
+POST /translate
+{
+  "text": "kass",
+  "src": "et",
+  "dest": "ru"
+}
+→ "кошка"
+```
+
+**Фраза:**
+```json
+POST /translate
+{
+  "text": "ma lähen koju",
+  "src": "et",
+  "dest": "ru"
+}
+→ "я иду домой"
 ```
 
 ## Развертывание на Render

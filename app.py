@@ -1,9 +1,25 @@
 from flask import Flask, request, jsonify
-from googletrans import Translator
+from deep_translator import GoogleTranslator
 
 app = Flask(__name__)
-# Инициализация переводчика
-translator = Translator()
+
+# --- КОРНЕВОЙ МАРШРУТ (ДЛЯ ПРОВЕРКИ) ---
+@app.route('/', methods=['GET'])
+def index():
+    return jsonify({
+        'status': 'online',
+        'message': 'Godot Translator Backend (deep-translator) is running!',
+        'endpoints': ['/translate'],
+        'example': {
+            'url': '/translate',
+            'method': 'POST',
+            'body': {
+                'text': 'tere',
+                'src': 'et',
+                'dest': 'ru'
+            }
+        }
+    }), 200
 
 # --- ЭНДПОИНТ ДЛЯ ПЕРЕВОДА ---
 @app.route('/translate', methods=['POST'])
@@ -20,18 +36,14 @@ def translate_text():
     dest_lang = data.get('dest', 'ru') # Язык по умолчанию: русский
     
     try:
-        # 2. Выполняем перевод с помощью py-googletrans
-        translation = translator.translate(
-            text_to_translate, 
-            src=src_lang, 
-            dest=dest_lang
-        )
+        # 2. Выполняем перевод с помощью deep-translator
+        translated_text = GoogleTranslator(source=src_lang, target=dest_lang).translate(text_to_translate)
         
         # 3. Возвращаем результат в формате JSON
         return jsonify({
             'original_text': text_to_translate,
-            'translated_text': translation.text,
-            'source_language': translation.src,
+            'translated_text': translated_text,
+            'source_language': src_lang,
             'target_language': dest_lang
         }), 200
 
