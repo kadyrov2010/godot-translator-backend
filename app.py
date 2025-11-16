@@ -32,13 +32,7 @@ def index():
 @app.route('/translate', methods=['POST'])
 def translate_text():
     # 1. Получаем данные из POST-запроса с явной поддержкой UTF-8
-    try:
-        data = request.get_json(force=True)
-    except:
-        # Если не получилось распарсить JSON, пробуем вручную
-        raw_data = request.get_data(as_text=True)
-        import json
-        data = json.loads(raw_data)
+    data = request.get_json(force=True)
     
     # Проверка обязательных полей
     if not data or 'text' not in data:
@@ -59,7 +53,9 @@ def translate_text():
     
     try:
         # 2. Выполняем перевод (ТОЧНО КАК В JUPYTER СКРИПТЕ)
+        print(f"[DEBUG] Translating: '{text_to_translate}' ({src_lang} -> {dest_lang})")
         translation = translator.translate(text_to_translate, src=src_lang, dest=dest_lang)
+        print(f"[DEBUG] Translation success: '{translation.text}'")
         
         # 3. Возвращаем результат в формате JSON
         return jsonify({
@@ -70,8 +66,19 @@ def translate_text():
         }), 200
 
     except Exception as e:
-        # 4. Обработка ошибок перевода
-        return jsonify({'error': 'Translation failed', 'details': str(e)}), 500
+        # 4. Обработка ошибок перевода (с детальным логированием)
+        import traceback
+        error_trace = traceback.format_exc()
+        print(f"[ERROR] Translation failed!")
+        print(f"[ERROR] Text: '{text_to_translate}'")
+        print(f"[ERROR] Exception: {str(e)}")
+        print(f"[ERROR] Traceback:\n{error_trace}")
+        
+        return jsonify({
+            'error': 'Translation failed', 
+            'details': str(e),
+            'text_length': len(text_to_translate)
+        }), 500
 
 # Запуск сервера локально (для тестирования)
 if __name__ == '__main__':
