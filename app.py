@@ -1,14 +1,17 @@
 from flask import Flask, request, jsonify
-from deep_translator import GoogleTranslator
+from googletrans import Translator
 
 app = Flask(__name__)
+# Инициализация переводчика (как в твоём Jupyter скрипте)
+translator = Translator()
 
 # --- КОРНЕВОЙ МАРШРУТ (ДЛЯ ПРОВЕРКИ) ---
 @app.route('/', methods=['GET'])
 def index():
     return jsonify({
         'status': 'online',
-        'message': 'Godot Translator Backend (deep-translator) is running!',
+        'message': 'Godot Translator Backend (googletrans 4.0.0-rc1) is running!',
+        'library': 'googletrans==4.0.0-rc1 (same as Jupyter)',
         'endpoints': ['/translate'],
         'example': {
             'url': '/translate',
@@ -36,15 +39,15 @@ def translate_text():
     dest_lang = data.get('dest', 'ru') # Язык по умолчанию: русский
     
     try:
-        # 2. Выполняем перевод с помощью deep-translator
-        translated_text = GoogleTranslator(source=src_lang, target=dest_lang).translate(text_to_translate)
+        # 2. Выполняем перевод (ТОЧНО КАК В JUPYTER СКРИПТЕ)
+        translation = translator.translate(text_to_translate, src=src_lang, dest=dest_lang)
         
         # 3. Возвращаем результат в формате JSON
         return jsonify({
-            'original_text': text_to_translate,
-            'translated_text': translated_text,
-            'source_language': src_lang,
-            'target_language': dest_lang
+            'original_text': translation.origin,
+            'translated_text': translation.text,
+            'source_language': translation.src,
+            'target_language': translation.dest
         }), 200
 
     except Exception as e:
