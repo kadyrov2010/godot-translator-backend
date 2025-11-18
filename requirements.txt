@@ -1,3 +1,4 @@
 Flask==3.0.0
 googletrans==4.0.0-rc1
 gunicorn==21.2.0
+gTTS==2.5.1
