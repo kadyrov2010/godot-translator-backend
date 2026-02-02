@@ -3,6 +3,8 @@ from googletrans import Translator
 from gtts import gTTS  # Импортируем gTTS для озвучки
 import io  # Импортируем для работы с байтами в памяти
 import json  # Добавьте импорт для ручного парсинга
+import os  # Для переменных окружения
+import requests  # Для запросов к Gemini API
 
 app = Flask(__name__)
 # Убедитесь, что эта конфигурация осталась
@@ -10,6 +12,12 @@ app.config['JSON_AS_ASCII'] = False
 app.config['JSONIFY_MIMETYPE'] = 'application/json; charset=utf-8'
 
 translator = Translator()
+
+# ============================================
+# GEMINI API PROXY (защищает API ключ)
+# ============================================
+GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY', '')
+GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models"
 
 # ... (Оставьте корневой маршрут '/')
 
@@ -103,6 +111,76 @@ def speak_text():
         print(f"[ERROR] TTS generation failed: {e}")
         return jsonify({
             'error': 'TTS generation failed',
+            'details': str(e)
+        }), 500
+
+# ============================================
+# ЭНДПОИНТ ДЛЯ GEMINI API (через proxy)
+# ============================================
+@app.route('/api/gemini', methods=['POST'])
+def gemini_proxy():
+    """
+    Proxy для Gemini API - защищает API ключ от декомпиляции
+    """
+    try:
+        # 1. Читаем данные от Godot
+        raw_data = request.data
+        data = json.loads(raw_data.decode('utf-8'))
+        
+        # 2. Валидация обязательных полей
+        if not data or 'model' not in data or 'contents' not in data:
+            return jsonify({'error': 'Missing required fields (model, contents)'}), 400
+        
+        # 3. Формируем URL к Gemini API
+        model = data.get('model', 'gemini-2.5-flash')
+        gemini_url = f"{GEMINI_BASE_URL}/{model}:generateContent?key={GEMINI_API_KEY}"
+        
+        print(f"[DEBUG] Gemini request: model={model}")
+        
+        # 4. Подготавливаем payload для Gemini
+        payload = {
+            'contents': data['contents']
+        }
+        
+        # Добавляем опциональные параметры если есть
+        if 'generationConfig' in data:
+            payload['generationConfig'] = data['generationConfig']
+        if 'systemInstruction' in data:
+            payload['systemInstruction'] = data['systemInstruction']
+        
+        # 5. Отправляем запрос к Gemini API
+        response = requests.post(
+            gemini_url,
+            json=payload,
+            headers={'Content-Type': 'application/json'},
+            timeout=15
+        )
+        
+        # 6. Проверяем статус ответа
+        if response.status_code != 200:
+            print(f"[ERROR] Gemini API error: {response.status_code}")
+            return jsonify({
+                'error': 'Gemini API error',
+                'status_code': response.status_code,
+                'details': response.text
+            }), response.status_code
+        
+        # 7. Возвращаем результат клиенту (Godot)
+        print(f"[DEBUG] Gemini response successful")
+        return jsonify(response.json()), 200
+        
+    except requests.Timeout:
+        print(f"[ERROR] Gemini request timed out")
+        return jsonify({'error': 'Request timed out (15 sec)'}), 504
+        
+    except json.JSONDecodeError as e:
+        print(f"[ERROR] Invalid JSON from client: {e}")
+        return jsonify({'error': 'Invalid JSON', 'details': str(e)}), 400
+        
+    except Exception as e:
+        print(f"[ERROR] Gemini proxy failed: {e}")
+        return jsonify({
+            'error': 'Internal server error',
             'details': str(e)
         }), 500
 
