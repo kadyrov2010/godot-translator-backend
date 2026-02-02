@@ -21,21 +21,9 @@ GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models"
 
 # Проверяем загрузку ключа при старте
 if GEMINI_API_KEY:
-    print(f"[INFO] Gemini API key loaded: {GEMINI_API_KEY[:10]}...{GEMINI_API_KEY[-4:]}")
+    print(f"[INFO] Gemini API key loaded successfully")
 else:
     print("[WARNING] GEMINI_API_KEY not found in environment!")
-    print(f"[DEBUG] Available env vars starting with 'GEMINI': {[k for k in os.environ.keys() if 'GEMINI' in k]}")
-
-# --- ТЕСТОВЫЙ ЭНДПОИНТ (для диагностики) ---
-@app.route('/debug/env', methods=['GET'])
-def debug_env():
-    """Показывает статус переменных окружения (только для отладки!)"""
-    return jsonify({
-        'gemini_key_present': bool(GEMINI_API_KEY),
-        'gemini_key_length': len(GEMINI_API_KEY) if GEMINI_API_KEY else 0,
-        'gemini_key_preview': f"{GEMINI_API_KEY[:10]}...{GEMINI_API_KEY[-4:]}" if GEMINI_API_KEY else "NOT SET",
-        'all_gemini_vars': [k for k in os.environ.keys() if 'GEMINI' in k.upper()]
-    }), 200
 
 # --- ЭНДПОИНТ ДЛЯ ПЕРЕВОДА ---
 @app.route('/translate', methods=['POST'])
@@ -156,10 +144,6 @@ def gemini_proxy():
         model = data.get('model', 'gemini-2.5-flash')
         gemini_url = f"{GEMINI_BASE_URL}/{model}:generateContent?key={GEMINI_API_KEY}"
         
-        print(f"[DEBUG] Gemini request: model={model}")
-        print(f"[DEBUG] API key (masked): {GEMINI_API_KEY[:10]}...{GEMINI_API_KEY[-4:]}")
-        print(f"[DEBUG] Request URL (masked): {gemini_url[:80]}...")
-        
         # 5. Подготавливаем payload для Gemini
         payload = {
             'contents': data['contents']
@@ -195,7 +179,6 @@ def gemini_proxy():
             }), response.status_code
         
         # 8. Возвращаем результат клиенту (Godot)
-        print(f"[DEBUG] Gemini response successful")
         return jsonify(response.json()), 200
         
     except requests.Timeout:
