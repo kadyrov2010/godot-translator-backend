@@ -24,8 +24,18 @@ if GEMINI_API_KEY:
     print(f"[INFO] Gemini API key loaded: {GEMINI_API_KEY[:10]}...{GEMINI_API_KEY[-4:]}")
 else:
     print("[WARNING] GEMINI_API_KEY not found in environment!")
+    print(f"[DEBUG] Available env vars starting with 'GEMINI': {[k for k in os.environ.keys() if 'GEMINI' in k]}")
 
-# ... (Оставьте корневой маршрут '/')
+# --- ТЕСТОВЫЙ ЭНДПОИНТ (для диагностики) ---
+@app.route('/debug/env', methods=['GET'])
+def debug_env():
+    """Показывает статус переменных окружения (только для отладки!)"""
+    return jsonify({
+        'gemini_key_present': bool(GEMINI_API_KEY),
+        'gemini_key_length': len(GEMINI_API_KEY) if GEMINI_API_KEY else 0,
+        'gemini_key_preview': f"{GEMINI_API_KEY[:10]}...{GEMINI_API_KEY[-4:]}" if GEMINI_API_KEY else "NOT SET",
+        'all_gemini_vars': [k for k in os.environ.keys() if 'GEMINI' in k.upper()]
+    }), 200
 
 # --- ЭНДПОИНТ ДЛЯ ПЕРЕВОДА ---
 @app.route('/translate', methods=['POST'])
