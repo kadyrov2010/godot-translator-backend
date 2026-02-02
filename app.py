@@ -19,6 +19,12 @@ translator = Translator()
 GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY', '')
 GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models"
 
+# Проверяем загрузку ключа при старте
+if GEMINI_API_KEY:
+    print(f"[INFO] Gemini API key loaded: {GEMINI_API_KEY[:10]}...{GEMINI_API_KEY[-4:]}")
+else:
+    print("[WARNING] GEMINI_API_KEY not found in environment!")
+
 # ... (Оставьте корневой маршрут '/')
 
 # --- ЭНДПОИНТ ДЛЯ ПЕРЕВОДА ---
@@ -131,13 +137,20 @@ def gemini_proxy():
         if not data or 'model' not in data or 'contents' not in data:
             return jsonify({'error': 'Missing required fields (model, contents)'}), 400
         
-        # 3. Формируем URL к Gemini API
+        # 3. Проверяем наличие API ключа
+        if not GEMINI_API_KEY:
+            print(f"[ERROR] GEMINI_API_KEY is empty!")
+            return jsonify({'error': 'Server configuration error: API key not set'}), 500
+        
+        # 4. Формируем URL к Gemini API
         model = data.get('model', 'gemini-2.5-flash')
         gemini_url = f"{GEMINI_BASE_URL}/{model}:generateContent?key={GEMINI_API_KEY}"
         
         print(f"[DEBUG] Gemini request: model={model}")
+        print(f"[DEBUG] API key (masked): {GEMINI_API_KEY[:10]}...{GEMINI_API_KEY[-4:]}")
+        print(f"[DEBUG] Request URL (masked): {gemini_url[:80]}...")
         
-        # 4. Подготавливаем payload для Gemini
+        # 5. Подготавливаем payload для Gemini
         payload = {
             'contents': data['contents']
         }
@@ -148,7 +161,7 @@ def gemini_proxy():
         if 'systemInstruction' in data:
             payload['systemInstruction'] = data['systemInstruction']
         
-        # 5. Отправляем запрос к Gemini API
+        # 6. Отправляем запрос к Gemini API
         response = requests.post(
             gemini_url,
             json=payload,
@@ -156,16 +169,22 @@ def gemini_proxy():
             timeout=15
         )
         
-        # 6. Проверяем статус ответа
+        # 7. Проверяем статус ответа
         if response.status_code != 200:
             print(f"[ERROR] Gemini API error: {response.status_code}")
+            print(f"[ERROR] Response body: {response.text}")
+            
+            # Специальная обработка 403 (Forbidden)
+            if response.status_code == 403:
+                print(f"[ERROR] 403 Forbidden - check API key validity and restrictions")
+            
             return jsonify({
                 'error': 'Gemini API error',
                 'status_code': response.status_code,
                 'details': response.text
             }), response.status_code
         
-        # 7. Возвращаем результат клиенту (Godot)
+        # 8. Возвращаем результат клиенту (Godot)
         print(f"[DEBUG] Gemini response successful")
         return jsonify(response.json()), 200
         
