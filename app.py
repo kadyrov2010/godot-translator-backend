@@ -14,6 +14,27 @@ app.config['JSONIFY_MIMETYPE'] = 'application/json; charset=utf-8'
 translator = Translator()
 
 # ============================================
+# IN-MEMORY КЕШ ДЛЯ ПЕРЕВОДОВ
+# ============================================
+TRANSLATION_CACHE = {}
+MAX_CACHE_SIZE = 2000  # Макс 2000 переводов (~200KB RAM)
+
+def get_cache_key(text: str, src: str, dest: str) -> str:
+    """Создаёт уникальный ключ для кеша"""
+    return f"{src}:{dest}:{text.lower().strip()}"
+
+def get_cached_translation(cache_key: str):
+    """Получает перевод из кеша"""
+    return TRANSLATION_CACHE.get(cache_key)
+
+def save_to_cache(cache_key: str, result: dict):
+    """Сохраняет перевод в кеш с FIFO очисткой"""
+    if len(TRANSLATION_CACHE) >= MAX_CACHE_SIZE:
+        # Удаляем самую старую запись (первую добавленную)
+        TRANSLATION_CACHE.pop(next(iter(TRANSLATION_CACHE)))
+    TRANSLATION_CACHE[cache_key] = result
+
+# ============================================
 # GEMINI API PROXY (защищает API ключ)
 # ============================================
 GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY', '')
@@ -51,20 +72,34 @@ def translate_text():
     src_lang = data.get('src', 'et') 
     dest_lang = data.get('dest', 'ru')
     
+    # === ПРОВЕРКА КЕША ===
+    cache_key = get_cache_key(text_to_translate, src_lang, dest_lang)
+    cached_result = get_cached_translation(cache_key)
+    
+    if cached_result:
+        print(f"[CACHE HIT] Returning cached translation for: '{text_to_translate}'")
+        return jsonify(cached_result), 200
+    
     # Отладка:
-    print(f"[DEBUG] Received text (Decoded): '{text_to_translate}'")
+    print(f"[CACHE MISS] Translating: '{text_to_translate}'")
     
     try:
         # 3. Выполняем перевод
         translation = translator.translate(text_to_translate, src=src_lang, dest=dest_lang)
         
-        # 4. Возвращаем результат
-        return jsonify({
+        # 4. Формируем результат
+        result = {
             'original_text': translation.origin,
             'translated_text': translation.text,
             'source_language': translation.src,
             'target_language': translation.dest
-        }), 200
+        }
+        
+        # 5. Сохраняем в кеш
+        save_to_cache(cache_key, result)
+        
+        # 6. Возвращаем результат
+        return jsonify(result), 200
 
     except Exception as e:
         # 5. Обработка ошибок
@@ -144,6 +179,25 @@ def gemini_proxy():
         model = data.get('model', 'gemini-2.5-flash')
         gemini_url = f"{GEMINI_BASE_URL}/{model}:generateContent?key={GEMINI_API_KEY}"
         
+        # === ПРОВЕРКА КЕША ДЛЯ GEMINI ===
+        # Извлекаем текст из contents для ключа кеша
+        request_text = ""
+        gemini_cache_key = ""
+        contents = data.get('contents', [])
+        if contents and len(contents) > 0:
+            parts = contents[0].get('parts', [])
+            if parts and len(parts) > 0:
+                request_text = parts[0].get('text', '')
+                # Используем model как "src" для уникальности
+                gemini_cache_key = get_cache_key(request_text, model, "gemini")
+                cached_gemini = get_cached_translation(gemini_cache_key)
+                
+                if cached_gemini:
+                    print(f"[CACHE HIT] Returning cached Gemini response for: '{request_text[:50]}...'")
+                    return jsonify(cached_gemini), 200
+                
+                print(f"[CACHE MISS] Gemini request: '{request_text[:50]}...'")
+        
         # 5. Подготавливаем payload для Gemini
         payload = {
             'contents': data['contents']
@@ -178,8 +232,12 @@ def gemini_proxy():
                 'details': response.text
             }), response.status_code
         
-        # 8. Возвращаем результат клиенту (Godot)
-        return jsonify(response.json()), 200
+        # 8. Сохраняем в кеш и возвращаем результат
+        gemini_result = response.json()
+        if request_text and gemini_cache_key:
+            save_to_cache(gemini_cache_key, gemini_result)
+        
+        return jsonify(gemini_result), 200
         
     except requests.Timeout:
         print(f"[ERROR] Gemini request timed out")
