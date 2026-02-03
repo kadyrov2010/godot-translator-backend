@@ -176,7 +176,7 @@ def gemini_proxy():
             return jsonify({'error': 'Server configuration error: API key not set'}), 500
         
         # 4. Формируем URL к Gemini API
-        model = data.get('model', 'gemini-2.5-flash')
+        model = data.get('model', 'gemini-2.5-flash-lite')
         gemini_url = f"{GEMINI_BASE_URL}/{model}:generateContent?key={GEMINI_API_KEY}"
         
         # === ПРОВЕРКА КЕША ДЛЯ GEMINI ===
